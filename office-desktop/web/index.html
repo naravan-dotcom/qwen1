@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Office-Desktop — Simulasi Kantor 3D</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: "Segoe UI", system-ui, sans-serif; background: #0b0e14; color: #e6e9ef; overflow: hidden; }
+    #app { position: fixed; inset: 0; }
+    canvas { display: block; }
+
+    .hud { position: fixed; z-index: 10; pointer-events: none; }
+    .panel {
+      background: rgba(13, 17, 25, .82); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,.08); border-radius: 14px;
+      padding: 12px 14px; box-shadow: 0 8px 30px rgba(0,0,0,.45);
+    }
+
+    /* kiri atas: judul + status */
+    #topleft { top: 14px; left: 14px; max-width: 320px; }
+    #topleft h1 { font-size: 17px; letter-spacing: .5px; display:flex; align-items:center; gap:8px; }
+    #topleft h1 .logo { font-size: 20px; }
+    #topleft .sub { font-size: 11px; color: #8b93a7; margin-top: 2px; }
+    #status { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .stat { min-width: 86px; }
+    .stat .label { font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: #8b93a7; }
+    .stat .value { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.09); margin-top: 4px; overflow: hidden; }
+    .bar > i { display: block; height: 100%; width: 0%; border-radius: 3px; transition: width .5s ease; }
+    #cpuBar > i { background: linear-gradient(90deg,#3ddc84,#ffd166,#ef476f); }
+    #memBar > i { background: linear-gradient(90deg,#4cc9f0,#b5179e); }
+
+    #mood { margin-top: 10px; font-size: 12px; color: #aab3c5; display:flex; gap:6px; align-items:center;}
+    #mood .emoji { font-size: 18px; }
+
+    /* kanan atas: daftar karyawan */
+    #topright { top: 14px; right: 14px; width: 260px; max-height: calc(100vh - 28px); display:flex; flex-direction:column;}
+    #topright h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #8b93a7; margin-bottom: 8px; }
+    #roster { overflow-y: auto; max-height: 46vh; scrollbar-width: thin; pointer-events: auto; }
+    .emp {
+      display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center;
+      padding: 6px 6px; border-radius: 8px; cursor: pointer; font-size: 12px;
+    }
+    .emp:hover, .emp.sel { background: rgba(255,255,255,.07); }
+    .emp .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .emp .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .emp .rl { font-size: 10px; color: #8b93a7; }
+    .emp .bz { font-size: 11px; font-variant-numeric: tabular-nums; color: #aab3c5; }
+
+    /* bawah: detail & bantuan */
+    #bottomleft { bottom: 14px; left: 14px; max-width: 420px; }
+    #detail { display: none; font-size: 12px; line-height: 1.55; }
+    #detail.show { display: block; }
+    #detail .name { font-size: 14px; font-weight: 600; }
+    #detail .tag { display:inline-block; font-size:10px; padding:1px 7px; border-radius:99px;
+                   background: rgba(255,255,255,.1); margin-left: 6px; vertical-align: 1px;}
+    #help { font-size: 11px; color: #8b93a7; margin-top: 8px; }
+    kbd { background:#1d2433; border:1px solid #303a50; border-bottom-width:2px; border-radius:4px;
+          padding:0 5px; font-size:10px; font-family:inherit; }
+
+    #toast { bottom: 16px; right: 16px; font-size: 12px; opacity: 0; transition: opacity .4s; }
+    #toast.show { opacity: 1; }
+    #toast.new { border-color: rgba(61,220,132,.5); }
+    #toast.gone { border-color: rgba(239,71,111,.5); }
+
+    #conn { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center;
+            background: rgba(11,14,20,.92); font-size: 14px; text-align: center; line-height: 1.7; transition: opacity .5s; }
+    #conn.hide { opacity: 0; pointer-events: none; }
+    #conn code { background:#1d2433; padding:2px 8px; border-radius:6px; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div class="hud panel" id="topleft">
+    <h1><span class="logo">🏢</span> Office-Desktop</h1>
+    <div class="sub">Karyawanmu adalah aplikasi yang berjalan di laptop ini.</div>
+    <div id="status">
+      <div class="stat">
+        <div class="label">Karyawan</div>
+        <div class="value" id="vWorkers">–</div>
+      </div>
+      <div class="stat">
+        <div class="label">Sibuk</div>
+        <div class="value" id="vBusy">–</div>
+      </div>
+      <div class="stat" style="min-width:120px">
+        <div class="label">CPU Laptop</div>
+        <div class="value" id="vCpu">–</div>
+        <div class="bar" id="cpuBar"><i></i></div>
+      </div>
+      <div class="stat" style="min-width:120px">
+        <div class="label">RAM</div>
+        <div class="value" id="vMem">–</div>
+        <div class="bar" id="memBar"><i></i></div>
+      </div>
+    </div>
+    <div id="mood"><span class="emoji" id="moodEmoji">😴</span><span id="moodText">menunggu data…</span></div>
+  </div>
+
+  <div class="hud panel" id="topright">
+    <h2>Daftar Karyawan</h2>
+    <div id="roster"></div>
+  </div>
+
+  <div class="hud panel" id="bottomleft">
+    <div id="detail"></div>
+    <div id="help">
+      🖱️ drag = putar kamera · scroll = zoom · klik karyawan = detail ·
+      <kbd>1</kbd>-<kbd>4</kbd> sudut kamera · <kbd>R</kbd> reset
+    </div>
+  </div>
+
+  <div class="hud panel" id="toast"></div>
+
+  <div id="conn">
+    <div>
+      ⏳ Menyambungkan ke server kantor…<br/>
+      Jalankan backend: <code>python backend/server.py</code><br/>
+      (atau <code>python backend/server.py --demo</code>)
+    </div>
+  </div>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
