@@ -1,0 +1,22 @@
+model:
+  path: "./models/model.gguf"
+  n_ctx: 4096
+  n_gpu_layers: -1        # -1 = all layers to GPU if available
+  n_threads: 4
+  chat_template: "chatml"  # chatml | llama | qwen
+
+generation:
+  temperature: 0.8
+  top_p: 0.9
+  top_k: 40
+  max_tokens: 1024
+  repeat_penalty: 1.1
+
+ui:
+  typing_speed: 0.015     # seconds per character
+  theme: "hacker"         # hacker | crimson
+  show_banner: true
+
+chat:
+  max_history: 50          # max messages to keep in context
+  system_prompt_enabled: true
